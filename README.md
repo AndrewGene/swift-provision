@@ -22,3 +22,5 @@ Simple files that provide the ability to read the embedded provisioning profile 
 - com.apple.developer.team-identifier
 - TeamName
 - TimeToLive (I believe this is days before expiration)
+- CertificateNames (Names of all certificates used to sign the build)
+

@@ -9,20 +9,20 @@
 import Foundation
 
 class ProvisioningProfile: NSObject{
-    var appName = ""
-    var appIdPrefix = ""
-    var creationDate = NSDate()
-    var expirationDate = NSDate()
-    var isDebug = false
-    var appId = ""
-    var teamId = ""
-    var teamName = ""
-    var name = ""
-    var ttl = 0 //time to live
     
-    static let sharedProfile = ProvisioningProfile()
+    var appName          = ""
+    var appIdPrefix      = ""
+    var creationDate     = Date()
+    var expirationDate   = Date()
+    var isDebug          = false
+    var appId            = ""
+    var teamId           = ""
+    var teamName         = ""
+    var name             = ""
+    var ttl              = 0 //time to live
+    var certificateNames = [String]()
     
-    private override init(){
-        
-    }
+    static let shared    = ProvisioningProfile()
+    
+    private override init() { }
 }

@@ -10,63 +10,59 @@ import Foundation
 
 class ProvisioningProfileParser: NSObject{
     
-    private var successfulProvisioningProfileParseClosure: (() -> Void)? = nil
-    
-    init(success:(() -> Void)){
+    init(success:(() -> ())?){
         super.init()
-        successfulProvisioningProfileParseClosure = success
-        let priority = DISPATCH_QUEUE_PRIORITY_DEFAULT
-        dispatch_async(dispatch_get_global_queue(priority, 0)) {
-            if let path = NSBundle.mainBundle().pathForResource("embedded", ofType: "mobileprovision"){
-                let data = NSData(contentsOfFile: path)
-                if data != nil{
+        
+        DispatchQueue.global().async {
+            guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"), let data = try? Data(contentsOf: url), let string = String(data: data, encoding: String.Encoding.isoLatin1) else {
+                ProvisioningProfile.shared.isDebug = true
+                DispatchQueue.main.async {
+                    success?()
+                }
+                return
+            }
+
+            let scanner = Scanner(string: string)
+            if scanner.scanUpTo("<plist", into: nil) {
+                var plistString:NSString? = ""
+                if scanner.scanUpTo("</plist>", into: &plistString) {
+                    plistString = (plistString! as String) + "</plist>" as NSString
                     
-                    let dataString = NSString(data: data!, encoding: NSISOLatin1StringEncoding)
-                    
-                    let scanner = NSScanner(string: dataString! as String)
-                    
-                    var ok = scanner.scanUpToString("<plist", intoString: nil)
-                    if ok{
-                        var plistString:NSString? = ""
-                        ok = scanner.scanUpToString("</plist>", intoString: &plistString)
-                        if ok{
-                            plistString = (plistString! as String) + "</plist>"
-                            //print(plistString)
-                            let plistData = plistString?.dataUsingEncoding(NSISOLatin1StringEncoding)
-                            do{
-                                let mobileProvision = try NSPropertyListSerialization.propertyListWithData(plistData!, options: .Immutable, format: nil)
-                                ProvisioningProfile.sharedProfile.appName = mobileProvision.objectForKey("AppIDName") as! String
-                                ProvisioningProfile.sharedProfile.creationDate = mobileProvision.objectForKey("CreationDate") as! NSDate
-                                ProvisioningProfile.sharedProfile.expirationDate = mobileProvision.objectForKey("ExpirationDate") as! NSDate
-                                let entitlements = mobileProvision.objectForKey("Entitlements") as! NSDictionary
-                                if let debug = entitlements.objectForKey("get-task-allow") as? Bool{
-                                    ProvisioningProfile.sharedProfile.isDebug = debug
-                                }
-                                ProvisioningProfile.sharedProfile.appId = entitlements.objectForKey("application-identifier") as! String
-                                ProvisioningProfile.sharedProfile.teamId = entitlements.objectForKey("com.apple.developer.team-identifier") as! String
-                                ProvisioningProfile.sharedProfile.teamName = mobileProvision.objectForKey("TeamName") as! String
-                                ProvisioningProfile.sharedProfile.ttl = mobileProvision.objectForKey("TimeToLive") as! Int
-                                ProvisioningProfile.sharedProfile.name = mobileProvision.objectForKey("Name") as! String
-                                
-                                dispatch_async(dispatch_get_main_queue()) {
-                                    self.successfulProvisioningProfileParseClosure!()
-                                }
+                    if let plistData = plistString?.data(using: String.Encoding.isoLatin1.rawValue) {
+                        if let mobileProvision = try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as! [String:Any] {
+                            ProvisioningProfile.shared.appName        = mobileProvision["AppIDName"] as! String
+                            ProvisioningProfile.shared.creationDate   = mobileProvision["CreationDate"] as! Date
+                            ProvisioningProfile.shared.expirationDate = mobileProvision["ExpirationDate"] as! Date
+                            let entitlements                                 = mobileProvision["Entitlements"] as! [String:Any]
+                            if let debug = entitlements["get-task-allow"] as? Bool{
+                                ProvisioningProfile.shared.isDebug    = debug
                             }
-                            catch{
-                                
+                            
+                            ProvisioningProfile.shared.appId          = entitlements["application-identifier"] as! String
+                            ProvisioningProfile.shared.teamId         = entitlements["com.apple.developer.team-identifier"] as! String
+                            ProvisioningProfile.shared.teamName       = mobileProvision["TeamName"] as! String
+                            ProvisioningProfile.shared.ttl            = mobileProvision["TimeToLive"] as! Int
+                            ProvisioningProfile.shared.name           = mobileProvision["Name"] as! String
+                            
+                            
+                            if let certData = mobileProvision["DeveloperCertificates"] as? [Data] {
+                                var certificateNames = [String]()
+                                for data in certData {
+                                    let certificate:SecCertificate = SecCertificateCreateWithData(nil, data as CFData)!
+                                    let description:CFString       = SecCertificateCopySubjectSummary(certificate)!
+                                    certificateNames.append(description as String)
+                                }
+                                ProvisioningProfile.shared.certificateNames = certificateNames
+                            }
+                            
+                            DispatchQueue.main.async {
+                                success?()
                             }
                             
                         }
                     }
                 }
             }
-            else{
-                ProvisioningProfile.sharedProfile.isDebug = true
-                dispatch_async(dispatch_get_main_queue()) {
-                    self.successfulProvisioningProfileParseClosure!()
-                }
-            }
         }
-        
     }
 }
